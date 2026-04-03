@@ -37,6 +37,7 @@ qt_add_qml_module(hyprpolkitagent
     VERSION 1.0
     QML_FILES
         qml/main.qml
+        qml/IconLock.qml
     SOURCES
         src/QMLIntegration.cpp
         src/QMLIntegration.hpp
@@ -52,7 +53,7 @@ set(LIBEXECDIR ${CMAKE_INSTALL_FULL_LIBEXECDIR})
 configure_file(assets/hyprpolkitagent-service.in hyprpolkitagent.service @ONLY)
 configure_file(assets/hyprpolkitagent-dbus.in hyprpolkitagent-dbus.service @ONLY)
 
-install(TARGETS hyprpolkitagent 
+install(TARGETS hyprpolkitagent
         DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
 install(FILES ${CMAKE_BINARY_DIR}/hyprpolkitagent.service
         DESTINATION "lib/systemd/user")
