@@ -1,38 +1,41 @@
 #pragma once
-
 #include <QObject>
-#include <QQmlApplicationEngine>
-#include <QPixmap>
-#include <QIcon>
+#include <QString>
+#include <mutex>
 
+/**
+ * CQMLIntegration — bridge between QML and the authentication agent.
+ *
+ * All methods called from multiple threads must be invoked via Qt's queued
+ * connection mechanism (QMetaObject::invokeMethod with Qt::QueuedConnection)
+ * to guarantee they execute on the Qt main thread.
+ */
 class CQMLIntegration : public QObject {
-    Q_OBJECT;
-    Q_PROPERTY(QString errorText MEMBER errorText);
+    Q_OBJECT
+
+    Q_PROPERTY(QString result   READ getResult NOTIFY resultChanged)
+    Q_PROPERTY(QString message  READ getMessage NOTIFY messageChanged)
+    Q_PROPERTY(QString user     READ getUser    NOTIFY userChanged)
 
   public:
-    explicit CQMLIntegration(QObject* parent = nullptr) : QObject(parent) {
-        ;
-    }
-    virtual ~CQMLIntegration() {
-        ;
-    }
+    explicit CQMLIntegration(QObject* parent = nullptr);
 
-    Q_INVOKABLE void setError(QString str);
+
+    Q_INVOKABLE void setResult(const QString& str);
+
+    Q_INVOKABLE void setError(const QString& error);
     Q_INVOKABLE void focus();
     Q_INVOKABLE void setInputBlocked(bool blocked);
 
-    QString             result = "fail", errorText = "";
-
-    Q_INVOKABLE QString getMessage();
-    Q_INVOKABLE QString getUser();
-
-    Q_INVOKABLE void    setResult(QString str);
-
-  public slots:
-    void onExit();
+    [[nodiscard]] QString getResult()  const;
+    [[nodiscard]] QString getMessage() const;
+    [[nodiscard]] QString getUser()    const;
 
   signals:
-    void setErrorString(QString err);
-    void focusField();
-    void blockInput(bool block);
+    void resultChanged();
+    void messageChanged();
+    void userChanged();
+
+  private:
+    QString m_result;
 };

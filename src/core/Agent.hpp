@@ -1,68 +1,72 @@
 #pragma once
-
-#include <QApplication>
-#include <QQmlApplicationEngine>
-#include <QQmlContext>
-#include <QQuickStyle>
-#include <QScreen>
+#include "PolkitListener.hpp"
+#include "SecureString.hpp"
 #include <memory>
 #include <mutex>
-
-#include "PolkitListener.hpp"
-#include <polkitqt1-subject.h>
-
-#include "SecureString.hpp"
-
-#include <hyprutils/memory/WeakPtr.hpp>
-using namespace Hyprutils::Memory;
-#define SP CSharedPointer
-#define WP CWeakPointer
+#include <QString>
 
 class CQMLIntegration;
+class QQmlEngine;
+
+struct SAuthResult {
+    std::string result;
+    bool        used = false;
+};
+
+struct SAuthState {
+    std::unique_ptr<QQmlEngine>        qmlEngine;
+    std::unique_ptr<CQMLIntegration>   qmlIntegration;
+};
 
 class CAgent {
   public:
     CAgent();
     ~CAgent();
 
-    void submitResultThreadSafe(const std::string &result);
     void resetAuthState();
-    bool start();
     void initAuthPrompt();
 
-    // UI helpers (thread-safe)
-    void uiSetError(const QString& err);
-    void uiBlockInput(bool blocked);
-    void uiFocusField();
+    /**
+     * Called from any thread to submit a result (password or "cancel").
+     * Internally acquires stateMutex; safe to call concurrently.
+     */
+    void submitResultThreadSafe(const std::string& result);
 
-    // listener accessors
-    bool listenerInProgress();
+    // ------------------------------------------------------------------ //
+    //  Thread-safe listener accessors                                      //
+    //  FIX (Major): The original accessors read listener.session without   //
+    //  holding any mutex, creating data races with Polkit callbacks.        //
+    //  All three now hold stateMutex for the duration of the read.          //
+    // ------------------------------------------------------------------ //
+
+    /** Thread-safe: returns true if a Polkit auth session is in progress. */
+    bool    listenerInProgress();
+
+    /** Thread-safe: returns the current auth prompt message, or empty. */
     QString listenerMessage();
+
+    /** Thread-safe: returns the selected user for the current session, or empty. */
     QString listenerSelectedUser();
 
+    // ------------------------------------------------------------------ //
+    //  Thread-safe UI helpers                                              //
+    //  Agent routes all UI updates through these so every call site uses   //
+    //  the same queued-invocation pattern instead of accessing             //
+    //  authState.qmlIntegration directly.                                  //
+    // ------------------------------------------------------------------ //
+    void uiSetError(const QString& msg);
+    void uiBlockInput(bool blocked);
+    void uiFocus();
+
+    SAuthState      authState;
+    CPolkitListener listener;
+
+    // stateMutex: protects authState and lastAuthResult
+    std::mutex stateMutex;
+
   private:
-
-    struct {
-        bool authing = false;
-        std::unique_ptr<QQmlApplicationEngine> qmlEngine;
-        std::unique_ptr<CQMLIntegration> qmlIntegration;
-    } authState;
-
-    struct {
-        std::string result;
-        bool        used = true;
-    } lastAuthResult;
-
-    CPolkitListener                   listener;
-    SP<PolkitQt1::UnixSessionSubject> sessionSubject;
-
-    bool                              resultReady();
-
-    std::mutex                        stateMutex;
-
-    friend class CQMLIntegration;
-    friend class CPolkitListener;
+    SAuthResult lastAuthResult;
 };
 
-inline std::unique_ptr<CAgent> g_pAgent;
-inline std::mutex gAgentMutex;
+// Global pointer — defined in Agent.cpp, extern'd by listener/QML integration.
+inline CAgent* g_pAgent = nullptr;

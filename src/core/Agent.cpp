@@ -1,160 +1,114 @@
-#define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE 1
-
-#include <polkitagent/polkitagent.h>
-#include <print>
-#include <QtCore/QString>
-#include <memory>
-#include <mutex>
-#include <QMetaObject>
-#include <QVariant>
-#include <QQmlApplicationEngine>
-#include <QQmlContext>
-#include <QQuickStyle>
-#include <QApplication>
-
-using namespace Qt::Literals::StringLiterals;
-
 #include "Agent.hpp"
-#include "../QMLIntegration.hpp"
 #include "SecureString.hpp"
+#include "../QMLIntegration.hpp"
+#include <QQmlEngine>
+#include <QMetaObject>
+#include <print>
+#include <mutex>
+
+std::mutex gAgentMutex;
 
 CAgent::CAgent() {
-    ;
+    g_pAgent = this;
 }
 
 CAgent::~CAgent() {
     std::lock_guard<std::mutex> lk(stateMutex);
-    // wipe last result securely
+    if (!lastAuthResult.result.empty()) {
+        volatile char* p = lastAuthResult.result.data();
+        for (size_t i = 0; i < lastAuthResult.result.size(); ++i)
+            p[i] = 0;
+    }
     lastAuthResult.result.clear();
-}
 
-bool CAgent::start() {
-    sessionSubject = makeShared<PolkitQt1::UnixSessionSubject>(getpid());
-
-    listener.registerListener(*sessionSubject, "/org/hyprland/PolicyKit1/AuthenticationAgent");
-
-    int argc = 1;
-    const char* argv[] = {"fusion-polkitagent"};
-    QApplication app(argc, const_cast<char**>(argv));
-
-    app.setApplicationName("Hyprland Polkit Agent");
-    QGuiApplication::setQuitOnLastWindowClosed(false);
-
-    app.exec();
-
-    return true;
+    g_pAgent = nullptr;
 }
 
 void CAgent::resetAuthState() {
     std::lock_guard<std::mutex> lk(stateMutex);
-    if (authState.authing) {
-        authState.authing = false;
-        // Unique_ptr will clean up automatically
-        authState.qmlEngine.reset();
-        authState.qmlIntegration.reset();
-    }
+    authState.qmlIntegration.reset();
+    authState.qmlEngine.reset();
 }
 
 void CAgent::initAuthPrompt() {
-    resetAuthState();
-
-    if (!listener.session.inProgress) {
-        std::print(stderr, "INTERNAL ERROR: Spawning qml prompt but session isn't in progress\n");
-        return;
-    }
-
-    std::print("Spawning qml prompt\n");
-
-    {
-        std::lock_guard<std::mutex> lk(stateMutex);
-        authState.authing = true;
-
-        authState.qmlIntegration = std::make_unique<CQMLIntegration>();
-
-        if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
-            QQuickStyle::setStyle("org.hyprland.style");
-
-        authState.qmlEngine = std::make_unique<QQmlApplicationEngine>();
-        authState.qmlEngine->rootContext()->setContextProperty("hpa", authState.qmlIntegration.get());
-        authState.qmlEngine->load(QUrl{u"qrc:/qt/qml/fusionpolkit/qml/main.qml"_s});
-
-        // Focus via signal on the queued main thread
-        QMetaObject::invokeMethod(authState.qmlIntegration.get(), "focus", Qt::QueuedConnection);
-    }
-}
-
-bool CAgent::resultReady() {
     std::lock_guard<std::mutex> lk(stateMutex);
-    return !lastAuthResult.used;
+    authState.qmlEngine      = std::make_unique<QQmlEngine>();
+    authState.qmlIntegration = std::make_unique<CQMLIntegration>();
 }
 
-void CAgent::submitResultThreadSafe(const std::string &result) {
-    // Store result under lock
-    {
-        std::lock_guard<std::mutex> lk(stateMutex);
-        lastAuthResult.used = false;
-        lastAuthResult.result = result;
-    }
-
-    // Move out and sanitize
+void CAgent::submitResultThreadSafe(const std::string& result) {
     std::string localStr;
     {
         std::lock_guard<std::mutex> lk(stateMutex);
-        localStr = std::move(lastAuthResult.result);
+        lastAuthResult.used   = false;
+        localStr              = result;
         lastAuthResult.result.clear();
-        lastAuthResult.used = true;
+        lastAuthResult.used   = true;
     }
 
-    // Determine if it's a password submission
-    bool pass = false;
-    if (localStr.rfind("auth:", 0) == 0) {
-        pass = true;
-    }
-
+    const bool pass = (localStr.rfind("auth:", 0) == 0);
     std::print("Got result from qml: {}\n", pass ? "auth:**PASSWORD**" : "cancel/fail");
 
     if (pass) {
-        const std::string pw = localStr.substr(5);
-        QString qpw = QString::fromUtf8(pw.c_str(), static_cast<int>(pw.size()));
+        SecureString pw(localStr.data() + 5, localStr.size() - 5);
+
+        {
+            volatile char* p = localStr.data();
+            for (size_t i = 0; i < localStr.size(); ++i)
+                p[i] = 0;
+        }
+        localStr.clear();
+
+        QString qpw = QString::fromUtf8(pw.data(), static_cast<int>(pw.size()));
         listener.submitPassword(qpw);
-        // wipe QString
+
         qpw.fill(u'\0');
-        // wipe local copy
-        volatile char *p = const_cast<char*>(pw.c_str());
-        for (size_t i = 0; i < pw.size(); ++i) p[i] = 0;
     } else {
+        {
+            volatile char* p = localStr.data();
+            for (size_t i = 0; i < localStr.size(); ++i)
+                p[i] = 0;
+        }
+        localStr.clear();
+
         listener.cancelPending();
     }
+
+    uiBlockInput(true);
 }
 
-// UI helpers
-void CAgent::uiSetError(const QString &err) {
-    std::lock_guard<std::mutex> lk(stateMutex);
-    if (!authState.qmlIntegration) return;
-    QMetaObject::invokeMethod(authState.qmlIntegration.get(), "setError", Qt::QueuedConnection, Q_ARG(QString, err));
-}
-
-void CAgent::uiBlockInput(bool blocked) {
-    std::lock_guard<std::mutex> lk(stateMutex);
-    if (!authState.qmlIntegration) return;
-    QMetaObject::invokeMethod(authState.qmlIntegration.get(), "setInputBlocked", Qt::QueuedConnection, Q_ARG(bool, blocked));
-}
-
-void CAgent::uiFocusField() {
-    std::lock_guard<std::mutex> lk(stateMutex);
-    if (!authState.qmlIntegration) return;
-    QMetaObject::invokeMethod(authState.qmlIntegration.get(), "focus", Qt::QueuedConnection);
-}
-
-// listener accessors
 bool CAgent::listenerInProgress() {
+    std::lock_guard<std::mutex> lk(stateMutex);
     return listener.session.inProgress;
 }
 
 QString CAgent::listenerMessage() {
+    std::lock_guard<std::mutex> lk(stateMutex);
     return listener.session.inProgress ? listener.session.message : QString{};
 }
 
 QString CAgent::listenerSelectedUser() {
+    std::lock_guard<std::mutex> lk(stateMutex);
     return listener.session.inProgress ? listener.session.selectedUser.toString() : QString{};
+}
+
+void CAgent::uiSetError(const QString& msg) {
+    std::lock_guard<std::mutex> lk(stateMutex);
+    if (authState.qmlIntegration)
+        QMetaObject::invokeMethod(authState.qmlIntegration.get(), "setError",
+                                  Qt::QueuedConnection, Q_ARG(QString, msg));
+}
+
+void CAgent::uiBlockInput(bool blocked) {
+    std::lock_guard<std::mutex> lk(stateMutex);
+    if (authState.qmlIntegration)
+        QMetaObject::invokeMethod(authState.qmlIntegration.get(), "setInputBlocked",
+                                  Qt::QueuedConnection, Q_ARG(bool, blocked));
+}
+
+void CAgent::uiFocus() {
+    std::lock_guard<std::mutex> lk(stateMutex);
+    if (authState.qmlIntegration)
+        QMetaObject::invokeMethod(authState.qmlIntegration.get(), "focus",
+                                  Qt::QueuedConnection);
 }

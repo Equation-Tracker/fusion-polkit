@@ -8,7 +8,7 @@ SERVICE_NAME="fusion-polkitagent"
 SERVICE_DIR="${HOME}/.config/systemd/user"
 SERVICE_FILE="${SERVICE_DIR}/${SERVICE_NAME}.service"
 
-echo "==> Building quillpolkit..."
+echo "==> Building fusion-polkitagent..."
 mkdir -p build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -18,15 +18,25 @@ if [ "${JOBS}" -gt 8 ]; then JOBS=8; fi
 make -j"${JOBS}"
 cd ..
 
-if [ -w "$(dirname "$INSTALL_PATH")" ]; then
+
+SHA256_SUM=$(sha256sum "${BUILD_BIN}" | awk '{print $1}')
+
+if [ -w "$(dirname "${INSTALL_PATH}")" ]; then
+    echo "==> Installing binary to ${INSTALL_PATH}..."
     cp "${BUILD_BIN}" "${INSTALL_PATH}"
 else
-# Compute checksum for verification
-SHA256_SUM=$(sha256sum "${BUILD_BIN}" | awk '{print $1}')
-echo "==> Installing binary to ${INSTALL_PATH} with secure permissions..."
-sudo install -m 0755 "${BUILD_BIN}" "${INSTALL_PATH}"
-sudo chown root:root "${INSTALL_PATH}"
-sudo chmod 755 "${INSTALL_PATH}"
+    echo "==> Installing binary to ${INSTALL_PATH} with secure permissions..."
+    sudo install -m 0755 "${BUILD_BIN}" "${INSTALL_PATH}"
+    sudo chown root:root "${INSTALL_PATH}"
+    sudo chmod 755 "${INSTALL_PATH}"
+fi
+
+INSTALLED_SHA256=$(sha256sum "${INSTALL_PATH}" | awk '{print $1}')
+if [ "${INSTALLED_SHA256}" != "${SHA256_SUM}" ]; then
+    echo "ERROR: checksum verification failed for ${INSTALL_PATH}" >&2
+    exit 1
+fi
+echo "==> Checksum verified OK."
 
 echo "==> Installing systemd user service..."
 mkdir -p "${SERVICE_DIR}"
@@ -46,14 +56,7 @@ Restart=on-failure
 [Install]
 WantedBy=graphical-session.target
 EOF
-fi
 
-echo "==> Disabling old hyprpolkitagent (if active)..."
-systemctl --user disable --now hyprpolkitagent 2>/dev/null || true
-
-echo "==> Enabling fusion-polkitagent..."
+echo "==> Reloading systemd user daemon..."
 systemctl --user daemon-reload
-systemctl --user enable --now "${SERVICE_NAME}"
-
-echo "==> Done! ${BINARY_NAME} is running (if service enabled)."
-systemctl --user status "${SERVICE_NAME}" --no-pager | head -n 8 || true
+echo "==> Done. Enable with: systemctl --user enable --now ${SERVICE_NAME}"

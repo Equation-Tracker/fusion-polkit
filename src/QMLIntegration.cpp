@@ -1,37 +1,54 @@
 #include "QMLIntegration.hpp"
-
 #include "core/Agent.hpp"
-#include "core/PolkitListener.hpp"
-
 #include <mutex>
+
+extern std::mutex gAgentMutex;
+extern CAgent*    g_pAgent;
+
+CQMLIntegration::CQMLIntegration(QObject* parent) : QObject(parent) {}
+
+void CQMLIntegration::setResult(const QString& str) {
+    {
+        std::lock_guard<std::mutex> lock(gAgentMutex);
+        m_result = str;
+        if (g_pAgent)
+            g_pAgent->submitResultThreadSafe(str.toStdString());
+    }
+    emit resultChanged();
+}
 
 void CQMLIntegration::onExit() {
     std::lock_guard<std::mutex> lock(gAgentMutex);
-    g_pAgent->submitResultThreadSafe(result.toStdString());
+    if (g_pAgent)
+        g_pAgent->submitResultThreadSafe("cancel");
 }
 
-void CQMLIntegration::setResult(QString str) {
-    result = str;
-    std::lock_guard<std::mutex> lock(gAgentMutex);
-    g_pAgent->submitResultThreadSafe(result.toStdString());
+QString CQMLIntegration::getMessage() const {
+    if (g_pAgent)
+        return g_pAgent->listenerMessage();
+    return {};
 }
 
-QString CQMLIntegration::getMessage() {
-    return g_pAgent->listener.session.inProgress ? g_pAgent->listener.session.message : "An application is requesting authentication.";
+QString CQMLIntegration::getUser() const {
+    if (g_pAgent)
+        return g_pAgent->listenerSelectedUser();
+    return {};
 }
 
-QString CQMLIntegration::getUser() {
-    return g_pAgent->listener.session.inProgress ? g_pAgent->listener.session.selectedUser.toString() : "an unknown user";
+QString CQMLIntegration::getResult() const {
+    return m_result;
 }
 
-void CQMLIntegration::setError(QString str) {
-    emit setErrorString(str);
+// Thread-safe UI helpers — these are Q_INVOKABLE so Agent can call them via
+// QMetaObject::invokeMethod(Qt::QueuedConnection) from worker threads.
+void CQMLIntegration::setError(const QString& error) {
+    emit errorChanged(error);
 }
 
 void CQMLIntegration::focus() {
-    emit focusField();
+    emit focusRequested();
 }
 
 void CQMLIntegration::setInputBlocked(bool blocked) {
-    emit blockInput(blocked);
+    emit inputBlockedChanged(blocked);
 }

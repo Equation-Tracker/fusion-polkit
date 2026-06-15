@@ -136,10 +136,9 @@ void CPolkitListener::submitPassword(const QString& pass) {
         session.attemptCount = 0;
     }
     session.attemptCount++;
-    if (session.attemptCount > 5) {
+    if (session.attemptCount >= 5) {
         // Too many attempts: abort and notify user
-        if (g_pAgent->authState.qmlIntegration)
-            g_pAgent->authState.qmlIntegration->setError(QStringLiteral("Too many authentication attempts. Please try again later."));
+        g_pAgent->uiSetError(QStringLiteral("Too many authentication attempts. Please try again later."));
         // Cancel the current session to prevent brute‑force
         cancelPending();
         return;
