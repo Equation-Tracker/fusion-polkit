@@ -27,6 +27,9 @@ git clone https://github.com/Equation-Tracker/fusion-polkit.git
 cd fusion-polkit
 chmod +x install.sh
 ./install.sh
+
+# Enable service
+systemctl --user enable --now fusion-polkitagent
 ```
 
 The install script builds the binary, copies it to `/usr/local/bin/fusion-polkitagent`, and sets up a systemd user service.
