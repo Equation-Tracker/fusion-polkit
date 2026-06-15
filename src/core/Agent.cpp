@@ -34,7 +34,7 @@ bool CAgent::start() {
     listener.registerListener(*sessionSubject, "/org/hyprland/PolicyKit1/AuthenticationAgent");
 
     int argc = 1;
-    const char* argv[] = {"hyprpolkitagent"};
+    const char* argv[] = {"fusion-polkitagent"};
     QApplication app(argc, const_cast<char**>(argv));
 
     app.setApplicationName("Hyprland Polkit Agent");
@@ -76,7 +76,7 @@ void CAgent::initAuthPrompt() {
 
         authState.qmlEngine = std::make_unique<QQmlApplicationEngine>();
         authState.qmlEngine->rootContext()->setContextProperty("hpa", authState.qmlIntegration.get());
-        authState.qmlEngine->load(QUrl{u"qrc:/qt/qml/hpa/qml/main.qml"_s});
+        authState.qmlEngine->load(QUrl{u"qrc:/qt/qml/fusionpolkit/qml/main.qml"_s});
 
         // Focus via signal on the queued main thread
         QMetaObject::invokeMethod(authState.qmlIntegration.get(), "focus", Qt::QueuedConnection);

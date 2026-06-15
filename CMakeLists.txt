@@ -22,7 +22,7 @@ pkg_check_modules(
 
 qt_standard_project_setup(REQUIRES 6.5)
 
-qt_add_executable(hyprpolkitagent
+qt_add_executable(fusion-polkitagent
     src/main.cpp
     src/core/Agent.cpp
     src/core/Agent.hpp
@@ -33,8 +33,8 @@ qt_add_executable(hyprpolkitagent
     src/core/SecureString.hpp
 )
 
-qt_add_qml_module(hyprpolkitagent
-    URI hpa
+qt_add_qml_module(fusion-polkitagent
+    URI fusionpolkit
     VERSION 1.0
     QML_FILES
         qml/main.qml
@@ -44,7 +44,7 @@ qt_add_qml_module(hyprpolkitagent
         src/QMLIntegration.hpp
 )
 
-target_link_libraries(hyprpolkitagent
+target_link_libraries(fusion-polkitagent
     PRIVATE Qt6::Widgets Qt6::Quick Qt6::Gui Qt6::QuickControls2 PkgConfig::deps
 )
 
@@ -52,18 +52,18 @@ include(GNUInstallDirs)
 
 # Hardening compile & link options (best-effort checks omitted for brevity)
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(hyprpolkitagent PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE)
-    target_link_options(hyprpolkitagent PRIVATE -pie -Wl,-z,relro -Wl,-z,now)
+    target_compile_options(fusion-polkitagent PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE)
+    target_link_options(fusion-polkitagent PRIVATE -pie -Wl,-z,relro -Wl,-z,now)
 endif()
 
 set(LIBEXECDIR ${CMAKE_INSTALL_FULL_LIBEXECDIR})
-configure_file(assets/hyprpolkitagent-service.in hyprpolkitagent.service @ONLY)
-configure_file(assets/hyprpolkitagent-dbus.in hyprpolkitagent-dbus.service @ONLY)
+configure_file(assets/fusion-polkitagent-service.in fusion-polkitagent.service @ONLY)
+configure_file(assets/fusion-polkitagent-dbus.in fusion-polkitagent-dbus.service @ONLY)
 
-install(TARGETS hyprpolkitagent
+install(TARGETS fusion-polkitagent
         DESTINATION ${CMAKE_INSTALL_LIBEXECDIR})
-install(FILES ${CMAKE_BINARY_DIR}/hyprpolkitagent.service
+install(FILES ${CMAKE_BINARY_DIR}/fusion-polkitagent.service
         DESTINATION "lib/systemd/user")
-install(FILES ${CMAKE_BINARY_DIR}/hyprpolkitagent-dbus.service
+install(FILES ${CMAKE_BINARY_DIR}/fusion-polkitagent-dbus.service
         DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/services
-        RENAME org.hyprland.hyprpolkitagent.service)
+        RENAME org.fusionpolkit.agent.service)
