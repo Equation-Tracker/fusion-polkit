@@ -11,6 +11,8 @@
 #include "PolkitListener.hpp"
 #include <polkitqt1-subject.h>
 
+#include "SecureString.hpp"
+
 #include <hyprutils/memory/WeakPtr.hpp>
 using namespace Hyprutils::Memory;
 #define SP CSharedPointer
@@ -23,10 +25,20 @@ class CAgent {
     CAgent();
     ~CAgent();
 
-    void submitResultThreadSafe(std::string result);
+    void submitResultThreadSafe(const std::string &result);
     void resetAuthState();
     bool start();
     void initAuthPrompt();
+
+    // UI helpers (thread-safe)
+    void uiSetError(const QString& err);
+    void uiBlockInput(bool blocked);
+    void uiFocusField();
+
+    // listener accessors
+    bool listenerInProgress();
+    QString listenerMessage();
+    QString listenerSelectedUser();
 
   private:
 
@@ -45,6 +57,8 @@ class CAgent {
     SP<PolkitQt1::UnixSessionSubject> sessionSubject;
 
     bool                              resultReady();
+
+    std::mutex                        stateMutex;
 
     friend class CQMLIntegration;
     friend class CPolkitListener;

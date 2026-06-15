@@ -38,8 +38,7 @@ class CPolkitListener : public PolkitQt1::Agent::Listener {
         QString                        cookie, message, iconName, actionId;
         PolkitQt1::Agent::AsyncResult* result = nullptr;
         PolkitQt1::Identity            selectedUser;
-        PolkitQt1::Agent::Session*     session = nullptr;
-        // rate limiting
+        PolkitQt1::Agent::Session*    session = nullptr;
         int                            attemptCount = 0;
         std::chrono::steady_clock::time_point firstAttemptTime = std::chrono::steady_clock::now();
     } session;

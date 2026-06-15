@@ -30,6 +30,7 @@ qt_add_executable(hyprpolkitagent
     src/core/PolkitListener.cpp
     src/QMLIntegration.cpp
     src/QMLIntegration.hpp
+    src/core/SecureString.hpp
 )
 
 qt_add_qml_module(hyprpolkitagent
@@ -48,6 +49,12 @@ target_link_libraries(hyprpolkitagent
 )
 
 include(GNUInstallDirs)
+
+# Hardening compile & link options (best-effort checks omitted for brevity)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(hyprpolkitagent PRIVATE -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE)
+    target_link_options(hyprpolkitagent PRIVATE -pie -Wl,-z,relro -Wl,-z,now)
+endif()
 
 set(LIBEXECDIR ${CMAKE_INSTALL_FULL_LIBEXECDIR})
 configure_file(assets/hyprpolkitagent-service.in hyprpolkitagent.service @ONLY)
