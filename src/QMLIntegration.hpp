@@ -17,9 +17,9 @@ class CQMLIntegration : public QObject {
         ;
     }
 
-    void                setError(QString str);
-    void                focus();
-    void                setInputBlocked(bool blocked);
+    Q_INVOKABLE void setError(QString str);
+    Q_INVOKABLE void focus();
+    Q_INVOKABLE void setInputBlocked(bool blocked);
 
     QString             result = "fail", errorText = "";
 

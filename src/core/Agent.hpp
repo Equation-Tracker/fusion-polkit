@@ -5,9 +5,12 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QScreen>
+#include <mutex>
 
 #include "PolkitListener.hpp"
 #include <polkitqt1-subject.h>
+
+#include "SecureString.hpp"
 
 #include <hyprutils/memory/WeakPtr.hpp>
 using namespace Hyprutils::Memory;
@@ -26,6 +29,16 @@ class CAgent {
     bool start();
     void initAuthPrompt();
 
+    // UI helpers (thread-safe)
+    void uiSetError(const QString& err);
+    void uiBlockInput(bool blocked);
+    void uiFocusField();
+
+    // listener accessors
+    bool listenerInProgress();
+    QString listenerMessage();
+    QString listenerSelectedUser();
+
   private:
     struct {
         bool                   authing        = false;
@@ -42,6 +55,8 @@ class CAgent {
     SP<PolkitQt1::UnixSessionSubject> sessionSubject;
 
     bool                              resultReady();
+
+    std::mutex                        stateMutex;
 
     friend class CQMLIntegration;
     friend class CPolkitListener;

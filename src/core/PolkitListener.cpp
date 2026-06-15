@@ -82,8 +82,8 @@ void CPolkitListener::completed(bool gainedAuthorization) {
 
     session.gainedAuth = gainedAuthorization;
 
-    if (!gainedAuthorization && g_pAgent->authState.qmlIntegration)
-        g_pAgent->authState.qmlIntegration->setError("Authentication failed");
+    if (!gainedAuthorization)
+        g_pAgent->uiSetError("Authentication failed");
 
     finishAuth();
 }
@@ -91,8 +91,7 @@ void CPolkitListener::completed(bool gainedAuthorization) {
 void CPolkitListener::showError(const QString& text) {
     std::print("> PKS showError: {}\n", text.toStdString());
 
-    if (g_pAgent->authState.qmlIntegration)
-        g_pAgent->authState.qmlIntegration->setError(text);
+    g_pAgent->uiSetError(text);
 }
 
 void CPolkitListener::showInfo(const QString& text) {
@@ -107,8 +106,7 @@ void CPolkitListener::finishAuth() {
 
     if (!session.gainedAuth && !session.cancelled) {
         std::print("> finishAuth: Did not gain auth. Reattempting.\n");
-        if (g_pAgent->authState.qmlIntegration)
-            g_pAgent->authState.qmlIntegration->blockInput(false);
+        g_pAgent->uiBlockInput(false);
         session.session->deleteLater();
         reattempt();
         return;
@@ -132,8 +130,7 @@ void CPolkitListener::submitPassword(const QString& pass) {
         return;
 
     session.session->setResponse(pass);
-    if (g_pAgent->authState.qmlIntegration)
-        g_pAgent->authState.qmlIntegration->blockInput(true);
+    g_pAgent->uiBlockInput(true);
 }
 
 void CPolkitListener::cancelPending() {
