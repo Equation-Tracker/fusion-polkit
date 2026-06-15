@@ -1,3 +1,7 @@
+// Copyright (c) 2024, Hypr Development
+// Copyright (c) 2026, Equation Tracker
+// SPDX-License-Identifier: BSD-3-Clause
+
 #pragma once
 #include <vector>
 #include <cstring>

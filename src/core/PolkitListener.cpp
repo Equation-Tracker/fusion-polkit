@@ -1,3 +1,7 @@
+// Copyright (c) 2024, Hypr Development
+// Copyright (c) 2026, Equation Tracker
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "PolkitListener.hpp"
 #include <QDebug>
 #include <QInputDialog>
@@ -12,8 +16,9 @@ CPolkitListener::CPolkitListener(QObject* parent) : Listener(parent) {
     ;
 }
 
-void CPolkitListener::initiateAuthentication(const QString& actionId, const QString& message, const QString& iconName, const PolkitQt1::Details& details, const QString& cookie,
-                                             const PolkitQt1::Identity::List& identities, AsyncResult* result) {
+void CPolkitListener::initiateAuthentication(const QString& actionId,
+  const QString& message, const QString& iconName, const PolkitQt1::Details& details,
+  const QString& cookie, const PolkitQt1::Identity::List& identities, AsyncResult* result) {
 
     std::print("> New authentication session\n");
 

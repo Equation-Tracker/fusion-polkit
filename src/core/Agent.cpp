@@ -1,15 +1,27 @@
-#include "Agent.hpp"
-#include "SecureString.hpp"
-#include "../QMLIntegration.hpp"
-#include <QQmlEngine>
+// Copyright (c) 2024, Hypr Development
+// Copyright (c) 2026, Equation Tracker
+// SPDX-License-Identifier: BSD-3-Clause
+
+#define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE 1
+
+#include <polkitagent/polkitagent.h>
+#include <QtCore/QString>
+#include <QVariant>
+#include <QQmlApplicationEngine>
+#include <QApplication>
+#include <QQuickStyle>
+#include <QQmlContext>
 #include <QMetaObject>
 #include <print>
 #include <mutex>
 
-std::mutex gAgentMutex;
+#include "Agent.hpp"
+#include "SecureString.hpp"
+#include "../QMLIntegration.hpp"
+
+using namespace Qt::Literals::StringLiterals;
 
 CAgent::CAgent() {
-    g_pAgent = this;
 }
 
 CAgent::~CAgent() {
@@ -20,8 +32,22 @@ CAgent::~CAgent() {
             p[i] = 0;
     }
     lastAuthResult.result.clear();
+}
 
-    g_pAgent = nullptr;
+bool CAgent::start() {
+  sessionSubject = makeShared<PolkitQt1::UnixSessionSubject>(getpid());
+
+  listener.registerListener(*sessionSubject, "/org/hyprland/PolicyKit1/AuthenticationAgent");
+
+  int argc = 1;
+  const char* argv[] = {[0] = "fusion-polkitagent" };
+  QApplication app(argc, const_cast<char**>(argv));
+
+  app.setApplicationName("Fusion Polkit Agent");
+  QGuiApplication::setQuitOnLastWindowClosed(false);
+
+  app.exec();
+  return true;
 }
 
 void CAgent::resetAuthState() {
@@ -31,11 +57,36 @@ void CAgent::resetAuthState() {
 }
 
 void CAgent::initAuthPrompt() {
+  resetAuthState();
+
+  if (!listenerInProgress()) {
+     std::print("INTERNAL ERROR: Spawning qml prompt but session isn't in progress.\n");
+     return;
+  }
+  std::print("Spawning QML prompt for new authentication session.\n");
+  {
     std::lock_guard<std::mutex> lk(stateMutex);
-    authState.qmlEngine      = std::make_unique<QQmlEngine>();
     authState.qmlIntegration = std::make_unique<CQMLIntegration>();
+
+    if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
+        QQuickStyle::setStyle("org.hyprland.style");
+
+    authState.qmlEngine      = std::make_unique<QQmlApplicationEngine>();
+    authState.qmlEngine->rootContext()->setContextProperty("hpa", authState.qmlIntegration.get());
+    authState.qmlEngine->load(QUrl(u"qrc:/qt/qml/fusionpolkit/qml/main.qml"_s));
+
+    if (authState.qmlEngine->rootObjects().isEmpty()) {
+      std::print("QML LOAD FAILED\n");
+    }
+
+    QMetaObject::invokeMethod(authState.qmlIntegration.get(), "focus", Qt::QueuedConnection);
+  }
 }
 
+bool CAgent::resultReady() {
+    std::lock_guard<std::mutex> lk(stateMutex);
+    return !lastAuthResult.used;
+}
 void CAgent::submitResultThreadSafe(const std::string& result) {
     std::string localStr;
     {
@@ -78,18 +129,23 @@ void CAgent::submitResultThreadSafe(const std::string& result) {
 }
 
 bool CAgent::listenerInProgress() {
-    std::lock_guard<std::mutex> lk(stateMutex);
     return listener.session.inProgress;
 }
 
 QString CAgent::listenerMessage() {
-    std::lock_guard<std::mutex> lk(stateMutex);
-    return listener.session.inProgress ? listener.session.message : QString{};
+    return listener.session.inProgress ? listener.session.message : "An app is requesting Authentication.";
 }
 
 QString CAgent::listenerSelectedUser() {
-    std::lock_guard<std::mutex> lk(stateMutex);
-    return listener.session.inProgress ? listener.session.selectedUser.toString() : QString{};
+    if (!listener.session.inProgress)
+        return "Unknown user";
+
+    QString user = listener.session.selectedUser.toString();
+
+    if (user.startsWith("unix-user:"))
+        user.remove(0, QString("unix-user:").size());
+
+    return user;
 }
 
 void CAgent::uiSetError(const QString& msg) {

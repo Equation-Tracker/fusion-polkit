@@ -1,3 +1,7 @@
+// Copyright (c) 2024, Hypr Development
+// Copyright (c) 2026, Equation Tracker
+// SPDX-License-Identifier: BSD-3-Clause
+
 #pragma once
 #include <QObject>
 #include <QString>
@@ -27,14 +31,20 @@ class CQMLIntegration : public QObject {
     Q_INVOKABLE void focus();
     Q_INVOKABLE void setInputBlocked(bool blocked);
 
-    [[nodiscard]] QString getResult()  const;
-    [[nodiscard]] QString getMessage() const;
-    [[nodiscard]] QString getUser()    const;
+    Q_INVOKABLE QString getResult()  const;
+    Q_INVOKABLE QString getMessage() const;
+    Q_INVOKABLE QString getUser()    const;
 
   signals:
     void resultChanged();
     void messageChanged();
     void userChanged();
+    void setErrorString(const QString& error);
+    void focusField();
+    void blockInput(bool block);
+
+  public slots:
+    void onExit();
 
   private:
     QString m_result;

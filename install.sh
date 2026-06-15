@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# Copyright (c) 2024, Hypr Development
+# Copyright (c) 2026, Equation Tracker
+# SPDX-License-Identifier: BSD-3-Clause
+
 set -euo pipefail
 
 BINARY_NAME="fusion-polkitagent"

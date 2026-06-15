@@ -1,9 +1,10 @@
+// Copyright (c) 2024, Hypr Development
+// Copyright (c) 2026, Equation Tracker
+// SPDX-License-Identifier: BSD-3-Clause
+
 #include "QMLIntegration.hpp"
 #include "core/Agent.hpp"
 #include <mutex>
-
-extern std::mutex gAgentMutex;
-extern CAgent*    g_pAgent;
 
 CQMLIntegration::CQMLIntegration(QObject* parent) : QObject(parent) {}
 
@@ -42,13 +43,13 @@ QString CQMLIntegration::getResult() const {
 // Thread-safe UI helpers — these are Q_INVOKABLE so Agent can call them via
 // QMetaObject::invokeMethod(Qt::QueuedConnection) from worker threads.
 void CQMLIntegration::setError(const QString& error) {
-    emit errorChanged(error);
+    emit setErrorString(error);
 }
 
 void CQMLIntegration::focus() {
-    emit focusRequested();
+    emit focusField();
 }
 
 void CQMLIntegration::setInputBlocked(bool blocked) {
-    emit inputBlockedChanged(blocked);
+    emit blockInput(blocked);
 }

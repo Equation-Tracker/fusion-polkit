@@ -1,4 +1,0 @@
-[D-BUS Service]
-Name=org.fusionpolkit.agent
-Exec=@LIBEXECDIR@/fusion-polkitagent
-SystemdService=fusion-polkitagent.service
