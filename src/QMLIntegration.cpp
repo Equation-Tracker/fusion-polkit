@@ -3,12 +3,16 @@
 #include "core/Agent.hpp"
 #include "core/PolkitListener.hpp"
 
+#include <mutex>
+
 void CQMLIntegration::onExit() {
+    std::lock_guard<std::mutex> lock(gAgentMutex);
     g_pAgent->submitResultThreadSafe(result.toStdString());
 }
 
 void CQMLIntegration::setResult(QString str) {
     result = str;
+    std::lock_guard<std::mutex> lock(gAgentMutex);
     g_pAgent->submitResultThreadSafe(result.toStdString());
 }
 

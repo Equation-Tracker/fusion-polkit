@@ -5,9 +5,13 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QScreen>
+#include <memory>
+#include <mutex>
 
 #include "PolkitListener.hpp"
 #include <polkitqt1-subject.h>
+
+#include "SecureString.hpp"
 
 #include <hyprutils/memory/WeakPtr.hpp>
 using namespace Hyprutils::Memory;
@@ -21,16 +25,27 @@ class CAgent {
     CAgent();
     ~CAgent();
 
-    void submitResultThreadSafe(const std::string& result);
+    void submitResultThreadSafe(const std::string &result);
     void resetAuthState();
     bool start();
     void initAuthPrompt();
 
+    // UI helpers (thread-safe)
+    void uiSetError(const QString& err);
+    void uiBlockInput(bool blocked);
+    void uiFocusField();
+
+    // listener accessors
+    bool listenerInProgress();
+    QString listenerMessage();
+    QString listenerSelectedUser();
+
   private:
+
     struct {
-        bool                   authing        = false;
-        QQmlApplicationEngine* qmlEngine      = nullptr;
-        CQMLIntegration*       qmlIntegration = nullptr;
+        bool authing = false;
+        std::unique_ptr<QQmlApplicationEngine> qmlEngine;
+        std::unique_ptr<CQMLIntegration> qmlIntegration;
     } authState;
 
     struct {
@@ -43,8 +58,11 @@ class CAgent {
 
     bool                              resultReady();
 
+    std::mutex                        stateMutex;
+
     friend class CQMLIntegration;
     friend class CPolkitListener;
 };
 
 inline std::unique_ptr<CAgent> g_pAgent;
+inline std::mutex gAgentMutex;

@@ -1,10 +1,8 @@
+#include "PolkitListener.hpp"
 #include <QDebug>
 #include <QInputDialog>
-
-#include "PolkitListener.hpp"
 #include "../QMLIntegration.hpp"
 #include "Agent.hpp"
-#include <polkitqt1-agent-session.h>
 
 #include <print>
 
@@ -42,6 +40,8 @@ void CPolkitListener::initiateAuthentication(const QString& actionId, const QStr
     session.gainedAuth   = false;
     session.cancelled    = false;
     session.inProgress   = true;
+    session.attemptCount = 0;
+    session.firstAttemptTime = std::chrono::steady_clock::now();
 
     g_pAgent->initAuthPrompt();
 
@@ -82,8 +82,8 @@ void CPolkitListener::completed(bool gainedAuthorization) {
 
     session.gainedAuth = gainedAuthorization;
 
-    if (!gainedAuthorization && g_pAgent->authState.qmlIntegration)
-        g_pAgent->authState.qmlIntegration->setError("Authentication failed");
+    if (!gainedAuthorization)
+        g_pAgent->uiSetError("Authentication failed");
 
     finishAuth();
 }
@@ -91,8 +91,7 @@ void CPolkitListener::completed(bool gainedAuthorization) {
 void CPolkitListener::showError(const QString& text) {
     std::print("> PKS showError: {}\n", text.toStdString());
 
-    if (g_pAgent->authState.qmlIntegration)
-        g_pAgent->authState.qmlIntegration->setError(text);
+    g_pAgent->uiSetError(text);
 }
 
 void CPolkitListener::showInfo(const QString& text) {
@@ -107,8 +106,7 @@ void CPolkitListener::finishAuth() {
 
     if (!session.gainedAuth && !session.cancelled) {
         std::print("> finishAuth: Did not gain auth. Reattempting.\n");
-        if (g_pAgent->authState.qmlIntegration)
-            g_pAgent->authState.qmlIntegration->blockInput(false);
+        g_pAgent->uiBlockInput(false);
         session.session->deleteLater();
         reattempt();
         return;
@@ -131,9 +129,24 @@ void CPolkitListener::submitPassword(const QString& pass) {
     if (!session.session)
         return;
 
+    // Rate limiting: allow max 5 attempts per minute
+    auto now = std::chrono::steady_clock::now();
+    if (now - session.firstAttemptTime > std::chrono::minutes(1)) {
+        session.firstAttemptTime = now;
+        session.attemptCount = 0;
+    }
+    session.attemptCount++;
+    if (session.attemptCount > 5) {
+        // Too many attempts: abort and notify user
+        if (g_pAgent->authState.qmlIntegration)
+            g_pAgent->authState.qmlIntegration->setError(QStringLiteral("Too many authentication attempts. Please try again later."));
+        // Cancel the current session to prevent brute‑force
+        cancelPending();
+        return;
+    }
+
     session.session->setResponse(pass);
-    if (g_pAgent->authState.qmlIntegration)
-        g_pAgent->authState.qmlIntegration->blockInput(true);
+    g_pAgent->uiBlockInput(true);
 }
 
 void CPolkitListener::cancelPending() {
