@@ -3,6 +3,7 @@
 #include <polkitagent/polkitagent.h>
 #include <print>
 #include <QtCore/QString>
+#include <memory>
 using namespace Qt::Literals::StringLiterals;
 
 #include "Agent.hpp"
@@ -21,9 +22,9 @@ bool CAgent::start() {
 
     listener.registerListener(*sessionSubject, "/org/hyprland/PolicyKit1/AuthenticationAgent");
 
-    int          argc = 1;
-    char*        argv = (char*)"hyprpolkitagent";
-    QApplication app(argc, &argv);
+    int argc = 1;
+    const char* argv[] = {"hyprpolkitagent"};
+    QApplication app(argc, const_cast<char**>(argv));
 
     app.setApplicationName("Hyprland Polkit Agent");
     QGuiApplication::setQuitOnLastWindowClosed(false);
@@ -36,14 +37,9 @@ bool CAgent::start() {
 void CAgent::resetAuthState() {
     if (authState.authing) {
         authState.authing = false;
-
-        if (authState.qmlEngine)
-            authState.qmlEngine->deleteLater();
-        if (authState.qmlIntegration)
-            authState.qmlIntegration->deleteLater();
-
-        authState.qmlEngine      = nullptr;
-        authState.qmlIntegration = nullptr;
+        // Unique_ptr will clean up automatically
+        authState.qmlEngine.reset();
+        authState.qmlIntegration.reset();
     }
 }
 
@@ -59,13 +55,13 @@ void CAgent::initAuthPrompt() {
 
     authState.authing = true;
 
-    authState.qmlIntegration = new CQMLIntegration();
+    authState.qmlIntegration = std::make_unique<CQMLIntegration>();
 
     if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE"))
         QQuickStyle::setStyle("org.hyprland.style");
 
-    authState.qmlEngine = new QQmlApplicationEngine();
-    authState.qmlEngine->rootContext()->setContextProperty("hpa", authState.qmlIntegration);
+    authState.qmlEngine = std::make_unique<QQmlApplicationEngine>();
+    authState.qmlEngine->rootContext()->setContextProperty("hpa", authState.qmlIntegration.get());
     authState.qmlEngine->load(QUrl{u"qrc:/qt/qml/hpa/qml/main.qml"_s});
 
     authState.qmlIntegration->focusField();
@@ -75,16 +71,22 @@ bool CAgent::resultReady() {
     return !lastAuthResult.used;
 }
 
-void CAgent::submitResultThreadSafe(const std::string& result) {
+void CAgent::submitResultThreadSafe(std::string result) {
     lastAuthResult.used   = false;
     lastAuthResult.result = result;
 
     const bool PASS = result.starts_with("auth:");
 
-    std::print("Got result from qml: {}\n", PASS ? "auth:**PASSWORD**" : result);
+    // Avoid logging sensitive password information
+    std::print("Got result from qml: {}\n", PASS ? "auth:<redacted>" : result);
 
-    if (PASS)
+    if (PASS) {
+        // Submit password
         listener.submitPassword(result.substr(result.find(":") + 1).c_str());
-    else
+        // Securely erase password from memory
+        std::fill(result.begin(), result.end(), '\0');
+        result.clear();
+    } else {
         listener.cancelPending();
+    }
 }

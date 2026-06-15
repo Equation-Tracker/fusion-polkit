@@ -5,6 +5,8 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QScreen>
+#include <memory>
+#include <mutex>
 
 #include "PolkitListener.hpp"
 #include <polkitqt1-subject.h>
@@ -21,16 +23,17 @@ class CAgent {
     CAgent();
     ~CAgent();
 
-    void submitResultThreadSafe(const std::string& result);
+    void submitResultThreadSafe(std::string result);
     void resetAuthState();
     bool start();
     void initAuthPrompt();
 
   private:
+
     struct {
-        bool                   authing        = false;
-        QQmlApplicationEngine* qmlEngine      = nullptr;
-        CQMLIntegration*       qmlIntegration = nullptr;
+        bool authing = false;
+        std::unique_ptr<QQmlApplicationEngine> qmlEngine;
+        std::unique_ptr<CQMLIntegration> qmlIntegration;
     } authState;
 
     struct {
@@ -48,3 +51,4 @@ class CAgent {
 };
 
 inline std::unique_ptr<CAgent> g_pAgent;
+inline std::mutex gAgentMutex;

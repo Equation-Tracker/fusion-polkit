@@ -7,6 +7,8 @@
 #include <polkitqt1-identity.h>
 #include <polkitqt1-details.h>
 #include <polkitqt1-agent-session.h>
+#include <chrono>
+#include <mutex>
 
 class CPolkitListener : public PolkitQt1::Agent::Listener {
     Q_OBJECT;
@@ -37,6 +39,9 @@ class CPolkitListener : public PolkitQt1::Agent::Listener {
         PolkitQt1::Agent::AsyncResult* result = nullptr;
         PolkitQt1::Identity            selectedUser;
         PolkitQt1::Agent::Session*     session = nullptr;
+        // rate limiting
+        int                            attemptCount = 0;
+        std::chrono::steady_clock::time_point firstAttemptTime = std::chrono::steady_clock::now();
     } session;
 
     void reattempt();

@@ -14,8 +14,12 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j"$(nproc)"
 cd ..
 
-echo "==> Installing binary to $INSTALL_PATH..."
-sudo cp build/hyprpolkitagent "$INSTALL_PATH"
+if [ -w "$(dirname "$INSTALL_PATH")" ]; then
+    cp build/hyprpolkitagent "$INSTALL_PATH"
+else
+    echo "==> Need root permissions to install binary"
+    sudo cp build/hyprpolkitagent "$INSTALL_PATH"
+fi
 
 echo "==> Installing systemd user service..."
 mkdir -p "$SERVICE_DIR"
