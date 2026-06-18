@@ -4,6 +4,9 @@ A polkit authentication agent for Hyprland with a stunning Glassmorphism dark th
 
 ![](assets/fusion-polkitagent.png)
 
+> [!caution]
+> It has high RAM usage. I have seen it reach upto 182 MB.
+
 ## Security Improvements
 
 - Securely wipes authentication credentials from memory after use.
